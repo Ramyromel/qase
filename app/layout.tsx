@@ -9,8 +9,27 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "QASE - Quantum Assertion of Stable Existence",
-  description: "Advanced cryptographic quantum state visualization and entropy analysis",
+  description:
+    "Advanced quantum state visualization with cryptographic entropy analysis, particle effects, and real-time quantum metrics",
   generator: "v0.app",
+  keywords: [
+    "quantum",
+    "cryptography",
+    "entropy",
+    "visualization",
+    "interactive",
+    "particles",
+    "quantum computing",
+    "stable existence",
+  ],
+  authors: [{ name: "Ibrahim Ghonem", url: "https://github.com/ibrahimghonem" }],
+  creator: "Ibrahim Ghonem",
+  openGraph: {
+    title: "QASE - Quantum Assertion of Stable Existence",
+    description: "Advanced quantum state visualization and entropy analysis system",
+    type: "website",
+    locale: "en_US",
+  },
   icons: {
     icon: [
       {
@@ -28,6 +47,13 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png",
   },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+  },
 }
 
 export default function RootLayout({
@@ -36,8 +62,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#050a15" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="QASE" />
+      </head>
+      <body className={`${_geist.className} antialiased`} style={{ margin: 0, padding: 0 }}>
         {children}
         <Analytics />
       </body>

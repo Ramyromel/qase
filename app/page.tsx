@@ -141,22 +141,25 @@ interface Particle {
   glow: number
   rotation: number
   rotationSpeed: number
+  trail: Array<{ x: number; y: number }>
 }
 
-const createParticle = (centerX: number, centerY: number): Particle => {
+const createParticle = (centerX: number, centerY: number, entropy: number): Particle => {
   const angle = Math.random() * Math.PI * 2
-  const velocity = Math.random() * 3 + 2
+  const velocity = Math.random() * 4 + 2
+  const hues = [200, 240, 280, 320, 0]
   return {
     x: centerX,
     y: centerY,
     vx: Math.cos(angle) * velocity,
-    vy: Math.sin(angle) * velocity - 1,
+    vy: Math.sin(angle) * velocity - 1.5,
     life: 1,
-    size: Math.random() * 4 + 1.5,
-    hue: Math.random() * 120 + 180,
-    glow: Math.random() * 0.8 + 0.4,
+    size: Math.random() * 5 + 2,
+    hue: hues[Math.floor(Math.random() * hues.length)],
+    glow: Math.random() * 1 + 0.6,
     rotation: Math.random() * Math.PI * 2,
-    rotationSpeed: (Math.random() - 0.5) * 0.1,
+    rotationSpeed: (Math.random() - 0.5) * 0.15,
+    trail: [],
   }
 }
 
@@ -174,8 +177,22 @@ const getStatistics = (value: number) => {
   const binary = value.toString(2).padStart(32, "0")
   const ones = binary.split("1").length - 1
   const zeros = 32 - ones
-  const transitions = binary.split("").filter((_, i) => binary[i] !== binary[i + 1]).length
-  return { ones, zeros, transitions }
+  let transitions = 0
+  for (let i = 0; i < 31; i++) {
+    if (binary[i] !== binary[i + 1]) transitions++
+  }
+  const runs = binary.match(/0+|1+/g) || []
+  const avgRunLength = runs.length > 0 ? 32 / runs.length : 0
+  return { ones, zeros, transitions, avgRunLength, runs: runs.length }
+}
+
+const getHammingMetrics = (value: number) => {
+  const weight = ((value >>> 0).toString(2).match(/1/g) || []).length
+  return {
+    hammingWeight: weight,
+    hammingDistance: 32 - weight,
+    density: (weight / 32) * 100,
+  }
 }
 
 export default function QASE() {
@@ -185,19 +202,27 @@ export default function QASE() {
   const [copied, setCopied] = useState(false)
   const [history, setHistory] = useState<number[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
+  const [mode, setMode] = useState<"hex" | "decimal" | "binary">("hex")
+  const [autoGenerate, setAutoGenerate] = useState(false)
+  const [stats, setStats] = useState(getStatistics(0))
+  const [hamming, setHamming] = useState(getHammingMetrics(0))
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particleCanvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>()
+  const autoGenerateRef = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
-    setV(awaken())
+    const initialValue = awaken()
+    setV(initialValue)
+    setStats(getStatistics(initialValue))
+    setHamming(getHammingMetrics(initialValue))
   }, [])
 
   useEffect(() => {
     const canvas = particleCanvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext("2d")
+    const ctx = canvas.getContext("2d", { alpha: true })
     if (!ctx) return
 
     const width = canvas.offsetWidth
@@ -207,50 +232,73 @@ export default function QASE() {
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
 
     const animate = () => {
-      // Semi-transparent background for trail effect
-      ctx.fillStyle = "rgba(5, 10, 20, 0.08)"
+      ctx.fillStyle = "rgba(5, 10, 20, 0.06)"
       ctx.fillRect(0, 0, width, height)
 
       setParticles((prev) => {
         const updated = prev
-          .map((p) => ({
-            ...p,
-            x: p.x + p.vx,
-            y: p.y + p.vy,
-            vx: p.vx * 0.985,
-            vy: p.vy * 0.985 + 0.08,
-            life: p.life - 0.012,
-            rotation: p.rotation + p.rotationSpeed,
-            glow: p.life > 0.7 ? p.glow : p.glow * 0.9,
-          }))
+          .map((p) => {
+            const newTrail = [...p.trail, { x: p.x, y: p.y }].slice(-8)
+            return {
+              ...p,
+              x: p.x + p.vx,
+              y: p.y + p.vy,
+              vx: p.vx * 0.98,
+              vy: p.vy * 0.98 + 0.12,
+              life: p.life - 0.015,
+              rotation: p.rotation + p.rotationSpeed,
+              glow: p.life > 0.5 ? p.glow : p.glow * 0.85,
+              trail: newTrail,
+            }
+          })
           .filter((p) => p.life > 0 && p.y < height + 100)
 
-        // Render particles with advanced effects
         updated.forEach((p) => {
-          const opacity = Math.pow(p.life, 1.2) * 0.7
+          const opacity = Math.pow(p.life, 1.1) * 0.8
 
-          // Main particle
-          ctx.fillStyle = `hsla(${p.hue}, 100%, ${50 + p.life * 20}%, ${opacity})`
+          // Trail rendering
+          if (p.trail.length > 1) {
+            ctx.strokeStyle = `hsla(${p.hue}, 100%, 50%, ${opacity * 0.2})`
+            ctx.lineWidth = p.size * 0.4
+            ctx.lineCap = "round"
+            ctx.lineJoin = "round"
+            ctx.beginPath()
+            ctx.moveTo(p.trail[0].x, p.trail[0].y)
+            for (let i = 1; i < p.trail.length; i++) {
+              ctx.lineTo(p.trail[i].x, p.trail[i].y)
+            }
+            ctx.stroke()
+          }
+
+          // Main particle with glow rings
+          ctx.fillStyle = `hsla(${p.hue}, 100%, ${55 + p.life * 15}%, ${opacity})`
           ctx.save()
           ctx.translate(p.x, p.y)
           ctx.rotate(p.rotation)
           ctx.beginPath()
           ctx.arc(0, 0, p.size, 0, Math.PI * 2)
           ctx.fill()
-          ctx.restore()
 
-          // Outer glow ring
-          ctx.strokeStyle = `hsla(${p.hue}, 100%, 60%, ${opacity * p.glow * 0.6})`
-          ctx.lineWidth = p.size * 0.8
+          // Outer glow
+          ctx.strokeStyle = `hsla(${p.hue}, 100%, 65%, ${opacity * p.glow * 0.5})`
+          ctx.lineWidth = p.size * 1.2
           ctx.beginPath()
-          ctx.arc(p.x, p.y, p.size + 2, 0, Math.PI * 2)
+          ctx.arc(0, 0, p.size + 1.5, 0, Math.PI * 2)
           ctx.stroke()
 
-          // Secondary glow
-          ctx.strokeStyle = `hsla(${p.hue + 30}, 100%, 50%, ${opacity * 0.3})`
-          ctx.lineWidth = 0.5
+          // Inner core
+          ctx.fillStyle = `hsla(${p.hue + 60}, 100%, 70%, ${opacity * 0.4})`
           ctx.beginPath()
-          ctx.arc(p.x, p.y, p.size + 5, 0, Math.PI * 2)
+          ctx.arc(0, 0, p.size * 0.4, 0, Math.PI * 2)
+          ctx.fill()
+
+          ctx.restore()
+
+          // Aura effect
+          ctx.strokeStyle = `hsla(${p.hue + 180}, 100%, 50%, ${opacity * 0.15})`
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, p.size + 6, 0, Math.PI * 2)
           ctx.stroke()
         })
 
@@ -267,45 +315,101 @@ export default function QASE() {
     }
   }, [])
 
+  useEffect(() => {
+    if (autoGenerate) {
+      autoGenerateRef.current = setInterval(() => {
+        const newValue = awaken()
+        setV(newValue)
+        setStats(getStatistics(newValue))
+        setHamming(getHammingMetrics(newValue))
+        setHistory((prev) => [newValue, ...prev.slice(0, 19)])
+
+        const canvas = particleCanvasRef.current
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect()
+          setParticles((p) => [
+            ...p,
+            ...Array.from({ length: 15 }, () =>
+              createParticle(rect.width / 2, rect.height / 2, computeEntropy(newValue)),
+            ),
+          ])
+        }
+      }, 2000)
+    } else {
+      if (autoGenerateRef.current) clearInterval(autoGenerateRef.current)
+    }
+
+    return () => {
+      if (autoGenerateRef.current) clearInterval(autoGenerateRef.current)
+    }
+  }, [autoGenerate])
+
   const handleClick = useCallback(async () => {
     setIsGenerating(true)
-
-    // Simulate quantum processing delay for immersion
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 150))
 
     const newValue = awaken()
     setV(newValue)
-    setHistory((prev) => [newValue, ...prev.slice(0, 9)])
+    setStats(getStatistics(newValue))
+    setHamming(getHammingMetrics(newValue))
+    setHistory((prev) => [newValue, ...prev.slice(0, 19)])
 
     const canvas = particleCanvasRef.current
     if (canvas) {
       const rect = canvas.getBoundingClientRect()
       const centerX = rect.width / 2
       const centerY = rect.height / 2
+      const entropy = computeEntropy(newValue)
 
-      // Create multiple bursts for dramatic effect
-      setParticles((prev) => [...prev, ...Array.from({ length: 20 }, () => createParticle(centerX, centerY))])
+      setParticles((prev) => [...prev, ...Array.from({ length: 25 }, () => createParticle(centerX, centerY, entropy))])
     }
 
     setIsGenerating(false)
   }, [])
 
   const handleCopy = useCallback(async () => {
-    const hexValue = v.toString(16).slice(0, 8).toUpperCase()
+    const displayValue =
+      mode === "hex"
+        ? v.toString(16).slice(0, 8).toUpperCase()
+        : mode === "decimal"
+          ? v.toString()
+          : v.toString(2).padStart(32, "0")
+
     try {
-      await navigator.clipboard.writeText(hexValue)
+      await navigator.clipboard.writeText(displayValue)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       console.error("Failed to copy")
     }
-  }, [v])
+  }, [v, mode])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && e.target === document.body) {
+        e.preventDefault()
+        handleClick()
+      }
+      if (e.ctrlKey && e.code === "KeyC") {
+        e.preventDefault()
+        handleCopy()
+      }
+      if (e.code === "KeyH") {
+        setMode((prev) => (prev === "hex" ? "decimal" : prev === "decimal" ? "binary" : "hex"))
+      }
+      if (e.code === "KeyI") {
+        setShowInfo((prev) => !prev)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [handleClick, handleCopy])
 
   const hexValue = useMemo(() => v.toString(16).slice(0, 8).toUpperCase(), [v])
   const decimalValue = useMemo(() => v.toString(), [v])
   const binaryValue = useMemo(() => v.toString(2).padStart(32, "0"), [v])
   const entropy = useMemo(() => computeEntropy(v), [v])
-  const stats = useMemo(() => getStatistics(v), [v])
   const glow = useMemo(() => ((v & 255) / 255) * 0.8 + 0.2, [v])
 
   return (
@@ -318,7 +422,7 @@ export default function QASE() {
         className={styles.backdrop}
         style={{
           opacity: glow,
-          background: `radial-gradient(circle at center, hsla(200, 100%, ${30 + entropy * 0.3}%, ${glow * 0.9}), transparent 70%)`,
+          background: `radial-gradient(circle at center, hsla(${entropy > 50 ? 280 : 200}, 100%, ${30 + entropy * 0.3}%, ${glow * 0.9}), transparent 70%)`,
         }}
       />
 
@@ -326,6 +430,12 @@ export default function QASE() {
         <div
           className={`${styles.coreContainer} ${isGenerating ? styles.generating : ""}`}
           onClick={!isGenerating ? handleClick : undefined}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.code === "Enter" || e.code === "Space") handleClick()
+          }}
+          aria-label="Generate new quantum value"
         >
           <div className={styles.coreGlowOuter} />
           <div className={styles.coreGlowInner} />
@@ -334,8 +444,10 @@ export default function QASE() {
             <div className={styles.label}>QASE ∴</div>
             <div className={styles.title}>QUANTUM ASSERTION</div>
             <div className={styles.subtitle}>of Stable Existence</div>
-            <div className={styles.value}>{hexValue}</div>
-            <div className={styles.hint}>{isGenerating ? "Generating..." : "Click to regenerate"}</div>
+            <div className={styles.value}>
+              {mode === "hex" ? hexValue : mode === "decimal" ? decimalValue : binaryValue.slice(0, 8)}
+            </div>
+            <div className={styles.hint}>{isGenerating ? "Σ Generating..." : "Space / Click"}</div>
           </div>
 
           <div className={styles.quantumIndicator}>
@@ -344,15 +456,34 @@ export default function QASE() {
           </div>
         </div>
 
-        <div className={`${styles.infoPanel} ${showInfo ? styles.visible : ""}`}>
+        <div className={styles.controlPanel}>
           <button
-            className={styles.infoToggle}
-            onClick={() => setShowInfo(!showInfo)}
-            aria-label="Toggle information panel"
+            className={styles.controlBtn}
+            onClick={() => setAutoGenerate(!autoGenerate)}
+            title="Toggle auto-generation (Ctrl+A)"
+            aria-label={autoGenerate ? "Disable auto-generation" : "Enable auto-generation"}
           >
-            <span className={styles.toggleIcon}>{showInfo ? "▼" : "▶"}</span>
+            {autoGenerate ? "⏸" : "▶"}
           </button>
+          <button
+            className={styles.controlBtn}
+            onClick={() => setMode((prev) => (prev === "hex" ? "decimal" : prev === "decimal" ? "binary" : "hex"))}
+            title="Cycle display mode (H)"
+            aria-label={`Current mode: ${mode}`}
+          >
+            {mode === "hex" ? "HEX" : mode === "decimal" ? "DEC" : "BIN"}
+          </button>
+          <button
+            className={styles.controlBtn}
+            onClick={() => setShowInfo(!showInfo)}
+            title="Toggle information panel (I)"
+            aria-label={showInfo ? "Hide information" : "Show information"}
+          >
+            {showInfo ? "▼" : "▶"}
+          </button>
+        </div>
 
+        <div className={`${styles.infoPanel} ${showInfo ? styles.visible : ""}`}>
           {showInfo && (
             <div className={styles.infoContent}>
               <div className={styles.infoSection}>
@@ -360,7 +491,12 @@ export default function QASE() {
                 <div className={styles.infoRow}>
                   <span className={styles.label}>HEX</span>
                   <span className={styles.value}>{hexValue}</span>
-                  <button className={styles.copyBtn} onClick={handleCopy} aria-label="Copy hex value">
+                  <button
+                    className={styles.copyBtn}
+                    onClick={handleCopy}
+                    aria-label="Copy hex value"
+                    title="Copy to clipboard (Ctrl+C)"
+                  >
                     {copied ? "✓" : "⎘"}
                   </button>
                 </div>
@@ -370,22 +506,30 @@ export default function QASE() {
                 </div>
                 <div className={styles.infoRow}>
                   <span className={styles.label}>BIN</span>
-                  <span className={styles.mono}>{binaryValue}</span>
+                  <span className={styles.mono}>{binaryValue.slice(0, 16)}...</span>
                 </div>
               </div>
 
               <div className={styles.divider} />
 
               <div className={styles.infoSection}>
-                <h3 className={styles.sectionTitle}>Quantum Metrics</h3>
+                <h3 className={styles.sectionTitle}>Quantum Entropy</h3>
                 <div className={styles.metricsGrid}>
                   <div className={styles.metric}>
-                    <div className={styles.metricLabel}>Entropy</div>
+                    <div className={styles.metricLabel}>Entropy Score</div>
                     <div className={styles.metricValue}>{entropy.toFixed(1)}%</div>
                     <div className={styles.metricBar}>
                       <div className={styles.metricFill} style={{ width: `${entropy}%` }} />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className={styles.divider} />
+
+              <div className={styles.infoSection}>
+                <h3 className={styles.sectionTitle}>Bit Analysis</h3>
+                <div className={styles.metricsGrid}>
                   <div className={styles.metric}>
                     <div className={styles.metricLabel}>Ones</div>
                     <div className={styles.metricValue}>{stats.ones}/32</div>
@@ -398,6 +542,30 @@ export default function QASE() {
                     <div className={styles.metricLabel}>Transitions</div>
                     <div className={styles.metricValue}>{stats.transitions}</div>
                   </div>
+                  <div className={styles.metric}>
+                    <div className={styles.metricLabel}>Runs</div>
+                    <div className={styles.metricValue}>{stats.runs}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.divider} />
+
+              <div className={styles.infoSection}>
+                <h3 className={styles.sectionTitle}>Hamming Metrics</h3>
+                <div className={styles.metricsGrid}>
+                  <div className={styles.metric}>
+                    <div className={styles.metricLabel}>Weight</div>
+                    <div className={styles.metricValue}>{hamming.hammingWeight}</div>
+                  </div>
+                  <div className={styles.metric}>
+                    <div className={styles.metricLabel}>Distance</div>
+                    <div className={styles.metricValue}>{hamming.hammingDistance}</div>
+                  </div>
+                  <div className={styles.metric}>
+                    <div className={styles.metricLabel}>Density</div>
+                    <div className={styles.metricValue}>{hamming.density.toFixed(1)}%</div>
+                  </div>
                 </div>
               </div>
 
@@ -407,7 +575,7 @@ export default function QASE() {
                 <div className={styles.infoSection}>
                   <h3 className={styles.sectionTitle}>Generation History</h3>
                   <div className={styles.historyList}>
-                    {history.map((val, idx) => (
+                    {history.slice(0, 10).map((val, idx) => (
                       <div key={idx} className={styles.historyItem}>
                         <span className={styles.historyIndex}>#{idx + 1}</span>
                         <span className={styles.historyValue}>{val.toString(16).slice(0, 8).toUpperCase()}</span>
@@ -419,6 +587,12 @@ export default function QASE() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className={styles.footer}>
+        <span className={styles.footerText}>Quantum Assertion of Stable Existence</span>
+        <span className={styles.footerDivider}>∴</span>
+        <span className={styles.footerHint}>Space: Generate • H: Mode • I: Info • Ctrl+C: Copy</span>
       </div>
     </main>
   )

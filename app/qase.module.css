@@ -290,6 +290,50 @@
   }
 }
 
+/* Adding advanced control panel styling */
+.controlPanel {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(5, 10, 20, 0.7);
+  border: 1px solid rgba(120, 220, 255, 0.2);
+  border-radius: 1rem;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 0 0 30px rgba(120, 220, 255, 0.1);
+  animation: fadeInUp 0.8s ease-out 0.6s both;
+  z-index: 11;
+}
+
+.controlBtn {
+  background: rgba(120, 220, 255, 0.1);
+  border: 1px solid rgba(120, 220, 255, 0.3);
+  color: rgba(120, 220, 255, 0.8);
+  padding: 0.65rem 1rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(10px);
+}
+
+.controlBtn:hover {
+  background: rgba(120, 220, 255, 0.25);
+  border-color: rgba(120, 220, 255, 0.6);
+  color: rgba(120, 220, 255, 1);
+  box-shadow: 0 0 20px rgba(120, 220, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.controlBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 10px rgba(120, 220, 255, 0.2);
+}
+
 /* ====== INFO PANEL ====== */
 .infoPanel {
   position: fixed;
@@ -563,6 +607,45 @@
   background: linear-gradient(90deg, transparent, rgba(120, 220, 255, 0.25), transparent);
 }
 
+/* Adding footer styling */
+.footer {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(5, 10, 20, 0.6);
+  border: 1px solid rgba(120, 220, 255, 0.15);
+  border-radius: 2rem;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 0 0 25px rgba(120, 220, 255, 0.08);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: rgba(120, 220, 255, 0.6);
+  z-index: 9;
+  animation: fadeInUp 0.8s ease-out 0.7s both;
+}
+
+.footerText {
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(120, 220, 255, 0.7);
+}
+
+.footerDivider {
+  color: rgba(120, 220, 255, 0.4);
+  opacity: 0.6;
+}
+
+.footerHint {
+  color: rgba(120, 220, 255, 0.5);
+  font-size: 0.7rem;
+}
+
 /* ====== RESPONSIVE DESIGN ====== */
 @media (max-width: 768px) {
   .coreContainer {
@@ -586,6 +669,23 @@
 
   .content {
     gap: 2.5rem;
+  }
+
+  /* Enhanced info panel positioning for smaller screens */
+  .footer {
+    font-size: 0.7rem;
+    padding: 0.6rem 1rem;
+    bottom: 1rem;
+  }
+
+  .controlPanel {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .controlBtn {
+    flex: 1;
+    min-width: 60px;
   }
 }
 
@@ -623,5 +723,24 @@
 
   .metricsGrid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Enhanced info panel positioning for smaller screens */
+  .footer {
+    font-size: 0.65rem;
+    padding: 0.5rem 0.75rem;
+    bottom: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .footerHint {
+    display: none;
+  }
+
+  .controlPanel {
+    width: 100%;
+    max-width: 300px;
   }
 }
